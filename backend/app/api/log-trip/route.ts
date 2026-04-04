@@ -38,6 +38,7 @@ interface BirdEntry {
 
 interface LogTripBody {
   walletAddress: string;
+  username: string;
   duration: number;   // seconds
   distance: number;   // meters
   birds: BirdEntry[];
@@ -117,6 +118,7 @@ async function logToSupabase(body: LogTripBody, score: number) {
     .from('trips')
     .insert({
       wallet_address: body.walletAddress,
+      username: body.username,
       duration_seconds: body.duration,
       distance_meters: body.distance,
       total_birds: totalBirds,
