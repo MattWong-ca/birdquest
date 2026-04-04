@@ -56,8 +56,7 @@ export default function ProfileScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [promoClaimed, setPromoClaimed] = useState(false);
-  const [promoClaiming, setPromoClaiming] = useState(false);
+  const [promoState, setPromoState] = useState<'idle' | 'claiming' | 'success' | 'claimed'>('idle');
 
   useEffect(() => {
     if (!walletAddress) return;
@@ -73,8 +72,8 @@ export default function ProfileScreen() {
   }, [walletAddress]);
 
   async function claimHbar() {
-    if (promoClaiming || promoClaimed || !walletAddress) return;
-    setPromoClaiming(true);
+    if (promoState !== 'idle' || !walletAddress) return;
+    setPromoState('claiming');
     try {
       const res = await fetch(`${API_URL}/api/claim-hbar`, {
         method: 'POST',
@@ -82,10 +81,14 @@ export default function ProfileScreen() {
         body: JSON.stringify({ walletAddress }),
       });
       const data = await res.json();
-      if (res.ok) setPromoClaimed(true);
-      else if (data.error === 'Already claimed') setPromoClaimed(true);
-    } finally {
-      setPromoClaiming(false);
+      if (res.ok || data.error === 'Already claimed') {
+        setPromoState('success');
+        setTimeout(() => setPromoState('claimed'), 2500);
+      } else {
+        setPromoState('idle');
+      }
+    } catch {
+      setPromoState('idle');
     }
   }
 
@@ -128,24 +131,33 @@ export default function ProfileScreen() {
       </View>
 
       {/* Explorer's Grant promo banner */}
-      {!promoClaimed && (
+      {promoState !== 'claimed' && (
         <View style={styles.promoBanner}>
-          <View style={styles.promoTextCol}>
-            <Text style={styles.promoTitle}>Explorer's Grant 🎁</Text>
-            <Text style={styles.promoDesc}>
-              Claim 10 free HBAR to unlock rare birds or tip others!
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.promoBtn, promoClaiming && styles.promoBtnDisabled]}
-            onPress={claimHbar}
-            disabled={promoClaiming}
-          >
-            {promoClaiming
-              ? <ActivityIndicator size="small" color={COLORS.WHITE} />
-              : <Text style={styles.promoBtnText}>Claim</Text>
-            }
-          </TouchableOpacity>
+          {promoState === 'success' ? (
+            <View style={styles.promoSuccess}>
+              <Ionicons name="checkmark-circle" size={24} color={COLORS.WHITE} />
+              <Text style={styles.promoSuccessText}>10 HBAR sent to your wallet!</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.promoTextCol}>
+                <Text style={styles.promoTitle}>Explorer's Grant 🎁</Text>
+                <Text style={styles.promoDesc}>
+                  Claim 10 free HBAR to unlock rare birds or tip others!
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.promoBtn, promoState === 'claiming' && styles.promoBtnDisabled]}
+                onPress={claimHbar}
+                disabled={promoState === 'claiming'}
+              >
+                {promoState === 'claiming'
+                  ? <ActivityIndicator size="small" color={COLORS.GREEN} />
+                  : <Text style={styles.promoBtnText}>Claim</Text>
+                }
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
 
@@ -343,5 +355,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 14,
     color: COLORS.GREEN,
+  },
+  promoSuccess: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  promoSuccessText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: COLORS.WHITE,
   },
 });
