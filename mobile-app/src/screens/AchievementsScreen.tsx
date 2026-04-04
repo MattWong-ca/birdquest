@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +13,7 @@ import {
 import { useReactiveClient } from '@dynamic-labs/react-hooks';
 import { dynamicClient } from '../client';
 import { COLORS } from '../constants/theme';
+import { CANNES_BIRDS, Rarity } from '../constants/birds';
 
 type Tab = 'badges' | 'collection';
 
@@ -23,6 +26,20 @@ interface NFTBadge {
 }
 
 const MIRROR_BASE = 'https://testnet.mirrornode.hedera.com/api/v1';
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const COLLECTION_PADDING = 16;
+const COLLECTION_COLS = 5;
+const COLLECTION_GAP = 8;
+const CELL_SIZE = Math.floor((SCREEN_WIDTH - COLLECTION_PADDING * 2 - COLLECTION_GAP * (COLLECTION_COLS - 1)) / COLLECTION_COLS);
+
+const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare'];
+const RARITY_COLORS: Record<Rarity, string> = {
+  Common: COLORS.GRAY,
+  Uncommon: '#2980b9',
+  Rare: '#8e44ad',
+};
 
 async function fetchNFTsForAddress(evmAddress: string): Promise<NFTBadge[]> {
   const res = await fetch(`${MIRROR_BASE}/accounts/${evmAddress}/nfts?limit=50`);
@@ -48,23 +65,46 @@ async function fetchNFTsForAddress(evmAddress: string): Promise<NFTBadge[]> {
   return badges;
 }
 
+async function fetchSeenBirds(walletAddress: string): Promise<Set<string>> {
+  const res = await fetch(`${API_URL}/api/my-birds?wallet=${walletAddress}`);
+  const data = await res.json();
+  return new Set<string>(data.birds ?? []);
+}
+
 export default function AchievementsScreen() {
   const { wallets } = useReactiveClient(dynamicClient);
   const walletAddress = wallets.userWallets[0]?.address ?? '';
 
   const [tab, setTab] = useState<Tab>('badges');
+
+  // Badges state
   const [badges, setBadges] = useState<NFTBadge[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [badgesLoading, setBadgesLoading] = useState(false);
+  const [badgesError, setBadgesError] = useState<string | null>(null);
+
+  // Collection state
+  const [seenBirds, setSeenBirds] = useState<Set<string>>(new Set());
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!walletAddress || tab !== 'badges') return;
-    setLoading(true);
-    setError(null);
+    setBadgesLoading(true);
+    setBadgesError(null);
     fetchNFTsForAddress(walletAddress)
       .then(setBadges)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => setBadgesError(e.message))
+      .finally(() => setBadgesLoading(false));
+  }, [walletAddress, tab]);
+
+  useEffect(() => {
+    if (!walletAddress || tab !== 'collection') return;
+    setCollectionLoading(true);
+    setCollectionError(null);
+    fetchSeenBirds(walletAddress)
+      .then(setSeenBirds)
+      .catch(e => setCollectionError(e.message))
+      .finally(() => setCollectionLoading(false));
   }, [walletAddress, tab]);
 
   return (
@@ -88,17 +128,17 @@ export default function AchievementsScreen() {
       {/* Badges tab */}
       {tab === 'badges' && (
         <>
-          {loading && (
+          {badgesLoading && (
             <View style={styles.center}>
               <ActivityIndicator color={COLORS.GREEN} />
             </View>
           )}
-          {error && (
+          {badgesError && (
             <View style={styles.center}>
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={styles.errorText}>{badgesError}</Text>
             </View>
           )}
-          {!loading && !error && (
+          {!badgesLoading && !badgesError && (
             <FlatList
               data={badges}
               keyExtractor={b => `${b.tokenId}-${b.serial}`}
@@ -130,9 +170,54 @@ export default function AchievementsScreen() {
 
       {/* Collection tab */}
       {tab === 'collection' && (
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>Collection coming soon</Text>
-        </View>
+        <>
+          {collectionLoading && (
+            <View style={styles.center}>
+              <ActivityIndicator color={COLORS.GREEN} />
+            </View>
+          )}
+          {collectionError && (
+            <View style={styles.center}>
+              <Text style={styles.errorText}>{collectionError}</Text>
+            </View>
+          )}
+          {!collectionLoading && !collectionError && (
+            <ScrollView contentContainerStyle={styles.collectionScroll}>
+              {RARITIES.map(rarity => {
+                const group = CANNES_BIRDS.filter(b => b.rarity === rarity);
+                const seen = group.filter(b => seenBirds.has(b.name)).length;
+                return (
+                  <View key={rarity} style={styles.raritySection}>
+                    <View style={styles.rarityHeader}>
+                      <View style={[styles.rarityDot, { backgroundColor: RARITY_COLORS[rarity] }]} />
+                      <Text style={[styles.rarityLabel, { color: RARITY_COLORS[rarity] }]}>{rarity}</Text>
+                      <Text style={styles.rarityCount}>{seen}/{group.length}</Text>
+                    </View>
+                    <View style={styles.collectionGrid}>
+                      {group.map(bird => {
+                        const spotted = seenBirds.has(bird.name);
+                        return (
+                          <View key={bird.id} style={styles.collectionCell}>
+                            {spotted ? (
+                              <Image source={{ uri: bird.image }} style={styles.collectionImage} />
+                            ) : (
+                              <View style={styles.collectionLocked}>
+                                <Text style={styles.collectionQ}>?</Text>
+                              </View>
+                            )}
+                            <Text style={styles.collectionName} numberOfLines={2}>
+                              {spotted ? bird.name : ' '}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </>
       )}
     </View>
   );
@@ -167,7 +252,7 @@ const styles = StyleSheet.create({
     color: COLORS.GREEN,
   },
 
-  // Grid
+  // Badges grid
   grid: { padding: 16, gap: 12 },
   row: { gap: 12 },
   badgeCard: {
@@ -198,6 +283,65 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.GRAY,
     textAlign: 'center',
+  },
+
+  // Collection
+  collectionScroll: { padding: 16, gap: 24 },
+  raritySection: { gap: 12 },
+  rarityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rarityDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  rarityLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    flex: 1,
+  },
+  rarityCount: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: COLORS.GRAY,
+  },
+  collectionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: COLLECTION_GAP,
+  },
+  collectionCell: {
+    width: CELL_SIZE,
+    alignItems: 'center',
+    gap: 4,
+  },
+  collectionImage: {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    borderRadius: 10,
+  },
+  collectionLocked: {
+    width: CELL_SIZE,
+    height: CELL_SIZE,
+    borderRadius: 10,
+    backgroundColor: COLORS.LIGHT_GRAY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collectionQ: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 22,
+    color: COLORS.GRAY,
+  },
+  collectionName: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    color: COLORS.DARK,
+    textAlign: 'center',
+    minHeight: 28,
   },
 
   // States
