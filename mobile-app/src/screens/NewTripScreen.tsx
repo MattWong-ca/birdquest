@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,14 +14,17 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
+import { BIRD_NAMES, findBird, type Bird } from '../constants/birds';
+
+const ANTHROPIC_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY!;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type TripState = 'drop-pin' | 'active' | 'camera';
+type TripState = 'drop-pin' | 'active' | 'identify';
 
 interface BirdEntry {
   id: string;
@@ -69,8 +74,12 @@ export default function NewTripScreen() {
   const [birds, setBirds] = useState<BirdEntry[]>([]);
   const [birdInput, setBirdInput] = useState('');
 
-  // Camera
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  // Identify
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [identifyDescription, setIdentifyDescription] = useState<string | null>(null);
+  const [matchedBird, setMatchedBird] = useState<Bird | null>(null);
+  const [isIdentifying, setIsIdentifying] = useState(false);
 
   const lastLocation = useRef<{ latitude: number; longitude: number } | null>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -158,42 +167,137 @@ export default function NewTripScreen() {
   }
 
   async function openCamera() {
-    if (!cameraPermission?.granted) {
-      const result = await requestCameraPermission();
-      if (!result.granted) {
-        Alert.alert('Camera required', 'Please enable camera access in Settings.');
-        return;
-      }
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Camera required', 'Please enable camera access in Settings.');
+      return;
     }
-    setTripState('camera');
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+      setPhotoBase64(result.assets[0].base64 ?? null);
+      setIdentifyDescription(null);
+      setMatchedBird(null);
+      setTripState('identify');
+    }
   }
 
-  // ── Camera screen ─────────────────────────────────────────────────────────
+  async function identifyBird() {
+    if (!photoBase64) return;
+    setIsIdentifying(true);
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-6',
+          max_tokens: 512,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: 'image/jpeg', data: photoBase64 },
+              },
+              {
+                type: 'text',
+                text: `You are a bird identification assistant for the Cannes, France area. Identify the bird in this image by choosing the closest match from this list:\n\n${BIRD_NAMES.join(', ')}\n\nRespond with valid JSON only, no other text:\n{"bird": "<exact name from list>", "description": "<2-3 sentences about key identifying features visible in this photo>"}`,
+              },
+            ],
+          }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.content?.[0]?.text ?? '{}';
+      const parsed = JSON.parse(text);
+      const bird = findBird(parsed.bird ?? '');
+      setMatchedBird(bird ?? null);
+      setIdentifyDescription(parsed.description ?? '');
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Failed to identify bird.');
+    } finally {
+      setIsIdentifying(false);
+    }
+  }
 
-  if (tripState === 'camera') {
+  function addIdentifiedBird() {
+    if (!matchedBird) return;
+    const loc = lastLocation.current;
+    setBirds(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        name: matchedBird.name,
+        count: 1,
+        timestamp: new Date(),
+        lat: loc?.latitude ?? 0,
+        lon: loc?.longitude ?? 0,
+      },
+    ]);
+    setTripState('active');
+  }
+
+  // ── Identify screen ───────────────────────────────────────────────────────
+
+  if (tripState === 'identify') {
     return (
-      <View style={styles.flex}>
-        <CameraView style={styles.flex} facing="back">
-          <View style={styles.cameraOverlay}>
-            <Text style={styles.cameraHint}>Point at a bird</Text>
-            <View style={styles.cameraButtons}>
-              <TouchableOpacity style={styles.btnSecondary} onPress={() => setTripState('active')}>
-                <Text style={styles.btnText}>Cancel</Text>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.identifyContainer}>
+        {/* Photo */}
+        {photoUri && (
+          <Image source={{ uri: photoUri }} style={styles.identifyPhoto} resizeMode="cover" />
+        )}
+
+        {/* Identify button */}
+        {!matchedBird && (
+          <TouchableOpacity
+            style={[styles.btnPrimary, isIdentifying && styles.btnDisabled]}
+            onPress={identifyBird}
+            disabled={isIdentifying}
+          >
+            {isIdentifying
+              ? <ActivityIndicator color={COLORS.WHITE} />
+              : <Text style={styles.btnText}>Identify Bird</Text>
+            }
+          </TouchableOpacity>
+        )}
+
+        {/* AI result */}
+        {matchedBird && identifyDescription && (
+          <View style={styles.identifyResult}>
+            <View style={styles.identifyResultHeader}>
+              <Text style={styles.identifyResultTitle}>{matchedBird.name}</Text>
+              <View style={[styles.rarityBadge, matchedBird.rarity === 'Common' ? styles.rarityCommon : matchedBird.rarity === 'Uncommon' ? styles.rarityUncommon : styles.rarityRare]}>
+                <Text style={styles.rarityText}>{matchedBird.rarity}</Text>
+              </View>
+            </View>
+            <Text style={styles.identifyResultBody}>{identifyDescription}</Text>
+
+            <View style={styles.identifyActions}>
+              <TouchableOpacity style={styles.btnPrimary} onPress={addIdentifiedBird}>
+                <Text style={styles.btnText}>Add to Trip</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.btnPrimary}
-                onPress={() => {
-                  // TODO: send photo to Claude vision API for identification
-                  Alert.alert('Coming soon', 'Claude vision identification will be added next.');
-                  setTripState('active');
-                }}
+                style={styles.btnSecondary}
+                onPress={() => Alert.alert('Coming soon', 'iNaturalist submission coming with backend.')}
               >
-                <Text style={styles.btnText}>Identify Bird</Text>
+                <Text style={styles.btnText}>Submit to iNat</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </CameraView>
-      </View>
+        )}
+
+        {/* Back */}
+        <TouchableOpacity style={styles.identifyBack} onPress={() => setTripState('active')}>
+          <Text style={styles.identifyBackText}>← Back to trip</Text>
+        </TouchableOpacity>
+      </ScrollView>
     );
   }
 
@@ -516,27 +620,71 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Camera
-  cameraOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 48,
+  // Identify screen
+  identifyContainer: {
+    padding: 16,
+    gap: 16,
   },
-  cameraHint: {
-    color: COLORS.WHITE,
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 16,
-    textAlign: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: 10,
-    borderRadius: 10,
-    alignSelf: 'center',
+  identifyPhoto: {
+    width: '100%',
+    height: 280,
+    borderRadius: 16,
   },
-  cameraButtons: {
+  identifyResult: {
+    backgroundColor: COLORS.WHITE,
+    borderRadius: 14,
+    padding: 16,
+    gap: 10,
+  },
+  identifyResultHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  identifyResultTitle: {
+    fontFamily: 'Sniglet_400Regular',
+    fontSize: 22,
+    color: COLORS.GREEN,
+    flex: 1,
+  },
+  identifyScientific: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: COLORS.GRAY,
+    fontStyle: 'italic',
+    marginTop: -4,
+  },
+  identifyResultBody: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: COLORS.DARK,
+    lineHeight: 22,
+  },
+  rarityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  rarityCommon: { backgroundColor: '#d4edda' },
+  rarityUncommon: { backgroundColor: '#fff3cd' },
+  rarityRare: { backgroundColor: '#f8d7da' },
+  rarityText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 11,
+  },
+  identifyActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  identifyBack: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+  },
+  identifyBackText: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 14,
+    color: COLORS.GRAY,
   },
 
   // Shared buttons
