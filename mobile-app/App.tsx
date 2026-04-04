@@ -87,21 +87,19 @@ export default function App() {
     Sniglet_400Regular,
   });
 
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={COLORS.GREEN} />
-      </View>
-    );
-  }
-
   return (
     <SafeAreaProvider>
-      <dynamicClient.reactNative.WebView />
       <NavigationContainer>
         <StatusBar style="dark" />
-        <Main />
+        {fontsLoaded ? (
+          <Main />
+        ) : (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={COLORS.GREEN} />
+          </View>
+        )}
       </NavigationContainer>
+      <dynamicClient.reactNative.WebView />
     </SafeAreaProvider>
   );
 }

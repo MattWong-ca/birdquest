@@ -3,10 +3,11 @@
     "name": "BirdQuest",
     "slug": "birdquest",
     "version": "1.0.0",
+    "scheme": "com.mattwong.birdquest",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
