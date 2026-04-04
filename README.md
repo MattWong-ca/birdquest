@@ -2,7 +2,6 @@
 
 Pokémon GO for birdwatching — contribute to the largest biodiversity dataset + earn real crypto rewards!
 
----
 
 ## The Problem
 
@@ -16,7 +15,6 @@ Most casual birders never log their sightings because there's no reward or motiv
 
 __How do we incentivize more people to contribute to birding data?__
 
----
 
 ## BirdQuest
 
@@ -38,7 +36,6 @@ __How do we incentivize more people to contribute to birding data?__
 
 Unlike other apps that force you to start from scratch, BirdQuest lets you contribute directly to the world's largest biodiversity dataset
 
----
 
 ## Tech Stack
 
@@ -62,7 +59,6 @@ BirdQuest uses Hedera across three layers:
 
 Dynamic handles wallet creation and authentication. Users sign up with email — Dynamic provisions an embedded EVM wallet automatically, no seed phrase required. The ViemExtension bridges Dynamic's wallet to viem for signing Hedera EVM transactions, enabling tipping and token transfers without users needing to understand crypto at all.
 
----
 
 ## Why Now
 
@@ -72,7 +68,6 @@ Two cultural shifts are converging:
 
 2. **The Pokémon GO effect** — Pokémon GO proved that millions of people will go outside and walk for hours if there's a game layer on top. Birding is having its own moment: participation has surged post-pandemic, apps like Merlin have crossed 10M downloads, and news coverage of birding as a hobby has continued to increase. The audience is already there — it just needs a reason to log their sightings.
 
----
 
 ## Future Plans
 
