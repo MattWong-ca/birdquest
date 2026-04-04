@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, Alert } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { dynamicClient } from '../client';
 
@@ -13,7 +13,13 @@ export default function LoginScreen() {
       <View style={styles.overlay}>
         <Text style={styles.title}>BirdQuest</Text>
 
-        <TouchableOpacity style={styles.button} onPress={() => dynamicClient.ui.auth.show()}>
+        <TouchableOpacity style={styles.button} onPress={() => {
+          try {
+            dynamicClient.ui.auth.show();
+          } catch (e: any) {
+            Alert.alert('Auth error', e?.message ?? String(e));
+          }
+        }}>
           <Text style={styles.buttonText}>Log In</Text>
         </TouchableOpacity>
       </View>
