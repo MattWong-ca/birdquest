@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,7 +11,12 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import { parseEther } from 'viem';
+import { useReactiveClient } from '@dynamic-labs/react-hooks';
+import { dynamicClient } from '../client';
 import { COLORS } from '../constants/theme';
+
+const TIP_PRESETS = [1, 2, 3];
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -90,6 +95,9 @@ function formatDistance(m: number) {
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
+  const { wallets } = useReactiveClient(dynamicClient);
+  const myWallet = wallets.userWallets[0]?.address ?? '';
+
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -176,10 +184,10 @@ export default function MapScreen() {
                 <Ionicons name="chevron-back" size={18} color={COLORS.GREEN} />
                 <Text style={styles.backText}>Back</Text>
               </TouchableOpacity>
-              <TripDetail trip={selectedTrip} />
+              <TripDetail trip={selectedTrip} myWallet={myWallet} />
             </>
           ) : selectedCluster && selectedCluster.trips.length === 1 ? (
-            <TripDetail trip={selectedCluster.trips[0]} />
+            <TripDetail trip={selectedCluster.trips[0]} myWallet={myWallet} />
           ) : selectedCluster ? (
             <>
               <Text style={styles.sheetTitle}>{selectedCluster.trips.length} Trips Here</Text>
@@ -219,15 +227,75 @@ function TripSummaryRow({ trip }: { trip: Trip }) {
   );
 }
 
-// Full detail with birds list
-function TripDetail({ trip }: { trip: Trip }) {
+// Full detail with birds list + tip
+function TripDetail({ trip, myWallet }: { trip: Trip; myWallet: string }) {
   const label = trip.username ? `@${trip.username}` : `${trip.wallet_address.slice(0, 6)}...`;
+  const isOwn = myWallet.toLowerCase() === trip.wallet_address.toLowerCase();
+
+  const [tipState, setTipState] = useState<'idle' | 'picking' | 'sending' | 'done'>('idle');
+  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+
+  async function sendTip(hbar: number) {
+    setSelectedAmount(hbar);
+    setTipState('sending');
+    try {
+      const walletClient = await (dynamicClient as any).viem.createWalletClient();
+      await walletClient.sendTransaction({
+        to: trip.wallet_address as `0x${string}`,
+        value: parseEther(hbar.toString()),
+      });
+      setTipState('done');
+    } catch {
+      setTipState('picking');
+    }
+  }
+
   return (
     <View style={styles.tripDetail}>
       <View style={styles.tripHeader}>
         <Text style={styles.tripUser}>{label}</Text>
         <Text style={styles.tripDate}>{formatDate(trip.logged_at)}</Text>
       </View>
+
+      {/* Tip button / picker — only for others' trips */}
+      {!isOwn && tipState === 'idle' && (
+        <TouchableOpacity style={styles.tipBtn} onPress={() => setTipState('picking')}>
+          <Ionicons name="heart-outline" size={14} color={COLORS.GREEN} />
+          <Text style={styles.tipBtnText}>Tip</Text>
+        </TouchableOpacity>
+      )}
+      {!isOwn && tipState === 'picking' && (
+        <View style={styles.tipPicker}>
+          <Text style={styles.tipPickerLabel}>Send tip in HBAR</Text>
+          <View style={styles.tipPresets}>
+            {TIP_PRESETS.map(amount => (
+              <TouchableOpacity
+                key={amount}
+                style={styles.tipPreset}
+                onPress={() => sendTip(amount)}
+              >
+                <Text style={styles.tipPresetText}>{amount} HBAR</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity onPress={() => setTipState('idle')}>
+            <Text style={styles.tipCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {!isOwn && tipState === 'sending' && (
+        <View style={styles.tipStatus}>
+          <ActivityIndicator size="small" color={COLORS.GREEN} />
+          <Text style={styles.tipStatusText}>Sending {selectedAmount} HBAR...</Text>
+        </View>
+      )}
+      {!isOwn && tipState === 'done' && (
+        <View style={styles.tipStatus}>
+          <Ionicons name="checkmark-circle" size={16} color={COLORS.GREEN} />
+          <Text style={styles.tipStatusText}>{selectedAmount} HBAR sent!</Text>
+        </View>
+      )}
+
       <View style={styles.tripStats}>
         <StatChip icon="walk-outline" label={formatDistance(trip.distance_meters)} />
         <StatChip icon="time-outline" label={formatDuration(trip.duration_seconds)} />
@@ -389,6 +457,59 @@ const styles = StyleSheet.create({
   },
   birdCount: {
     fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: COLORS.GRAY,
+  },
+
+  // Tip
+  tipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: COLORS.GREEN,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  tipBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: COLORS.GREEN,
+  },
+  tipPicker: { gap: 8 },
+  tipPickerLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: COLORS.DARK,
+  },
+  tipPresets: { flexDirection: 'row', gap: 8 },
+  tipPreset: {
+    flex: 1,
+    backgroundColor: COLORS.GREEN,
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  tipPresetText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
+    color: COLORS.WHITE,
+  },
+  tipCancel: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: COLORS.GRAY,
+    textAlign: 'center',
+  },
+  tipStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tipStatusText: {
+    fontFamily: 'Poppins_400Regular',
     fontSize: 13,
     color: COLORS.GRAY,
   },
