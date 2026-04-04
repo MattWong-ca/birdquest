@@ -143,7 +143,7 @@ export default function ProfileScreen() {
               <View style={styles.promoTextCol}>
                 <Text style={styles.promoTitle}>Explorer's Grant 🎁</Text>
                 <Text style={styles.promoDesc}>
-                  Claim 10 free HBAR to unlock rare birds or tip others!
+                  Claim 10 free HBAR to tip the efforts of other birders!
                 </Text>
               </View>
               <TouchableOpacity
