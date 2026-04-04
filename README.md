@@ -16,17 +16,15 @@ Most casual birders never log their sightings because there's no reward or motiv
 *How do we incentivize more people to contribute to birding data?*
 
 
-## BirdQuest
-
-**Core features:**
+## Core Features
 
 1. Social
     - **Share Cards** - share your birding trip stats, just like Strava/Flighty
-    - **Community map** — see where other birders have been, tap any trip to view their sightings, and tip them HBAR for a great spot
+    - **Community map** — see where other birders have been and tap any trip to view their sightings
 
 2. Incentives + Gamification
     - **Onchain rewards** — earn BIRD tokens every trip, weighted by distance, time, and species rarity
-    - **Weekly quests** — compete on a live leaderboard for a sponsored HBAR prize pool, paid out automatically on-chain
+    - **Weekly quests** — compete on a live leaderboard for a HBAR prize pool, paid out automatically onchain
     - **NFT badges** — mint badges like *First Trip* and *Rare Bird* directly to your wallet
     - **Tip users** - tip other birders for great finds!
 
