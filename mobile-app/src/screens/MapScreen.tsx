@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   StyleSheet,
@@ -11,12 +12,19 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { parseEther } from 'viem';
-import { useReactiveClient } from '@dynamic-labs/react-hooks';
+import { defineChain, parseEther } from 'viem';
 import { dynamicClient } from '../client';
 import { COLORS } from '../constants/theme';
 
 const TIP_PRESETS = [1, 2, 3];
+
+const hederaTestnetChain = defineChain({
+  id: 296,
+  name: 'Hedera Testnet',
+  nativeCurrency: { decimals: 18, name: 'HBAR', symbol: 'HBAR' },
+  rpcUrls: { default: { http: ['https://testnet.hashio.io/api'] } },
+  blockExplorers: { default: { name: 'HashScan', url: 'https://hashscan.io/testnet' } },
+});
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -81,7 +89,7 @@ function clusterTrips(trips: Trip[]): Cluster[] {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function formatDuration(s: number) {
@@ -95,9 +103,6 @@ function formatDistance(m: number) {
 
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
-  const { wallets } = useReactiveClient(dynamicClient);
-  const myWallet = wallets.userWallets[0]?.address ?? '';
-
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -184,10 +189,10 @@ export default function MapScreen() {
                 <Ionicons name="chevron-back" size={18} color={COLORS.GREEN} />
                 <Text style={styles.backText}>Back</Text>
               </TouchableOpacity>
-              <TripDetail trip={selectedTrip} myWallet={myWallet} />
+              <TripDetail trip={selectedTrip} onDismiss={() => { setSelectedTrip(null); setSelectedCluster(null); }} />
             </>
           ) : selectedCluster && selectedCluster.trips.length === 1 ? (
-            <TripDetail trip={selectedCluster.trips[0]} myWallet={myWallet} />
+            <TripDetail trip={selectedCluster.trips[0]} onDismiss={() => setSelectedCluster(null)} />
           ) : selectedCluster ? (
             <>
               <Text style={styles.sheetTitle}>{selectedCluster.trips.length} Trips Here</Text>
@@ -215,8 +220,8 @@ function TripSummaryRow({ trip }: { trip: Trip }) {
   return (
     <View style={styles.tripRowCompact}>
       <View style={styles.tripHeader}>
-        <Text style={styles.tripUser}>{label}</Text>
-        <Text style={styles.tripDate}>{formatDate(trip.logged_at)}</Text>
+        <Text style={styles.tripDateBold}>{formatDate(trip.logged_at)}</Text>
+        <Text style={styles.tripUserSmall}>{label}</Text>
       </View>
       <View style={styles.tripStats}>
         <StatChip icon="egg-outline" label={`${trip.total_birds} birds`} />
@@ -228,43 +233,53 @@ function TripSummaryRow({ trip }: { trip: Trip }) {
 }
 
 // Full detail with birds list + tip
-function TripDetail({ trip, myWallet }: { trip: Trip; myWallet: string }) {
+function TripDetail({ trip, onDismiss }: { trip: Trip; onDismiss: () => void }) {
+  const myWallet = dynamicClient.wallets.userWallets[0]?.address ?? '';
   const label = trip.username ? `@${trip.username}` : `${trip.wallet_address.slice(0, 6)}...`;
-  const isOwn = myWallet.toLowerCase() === trip.wallet_address.toLowerCase();
+  const isOwn = myWallet !== '' && myWallet.toLowerCase() === trip.wallet_address.toLowerCase();
+  const canTip = !isOwn || myWallet === '';
 
-  const [tipState, setTipState] = useState<'idle' | 'picking' | 'sending' | 'done'>('idle');
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [tipState, setTipState] = useState<'idle' | 'picking'>('idle');
 
   async function sendTip(hbar: number) {
-    setSelectedAmount(hbar);
-    setTipState('sending');
+    setTipState('idle');
+    onDismiss(); // close our sheet so Dynamic's modal is on top
     try {
-      const walletClient = await (dynamicClient as any).viem.createWalletClient();
+      const wallet = dynamicClient.wallets.userWallets[0];
+      if (!wallet) return;
+      const walletClient = await dynamicClient.viem.createWalletClient({
+        wallet,
+        chain: hederaTestnetChain,
+      });
       await walletClient.sendTransaction({
         to: trip.wallet_address as `0x${string}`,
         value: parseEther(hbar.toString()),
       });
-      setTipState('done');
-    } catch {
-      setTipState('picking');
+      Alert.alert('Tip sent!', `${hbar} HBAR sent successfully.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Transaction failed');
     }
   }
 
   return (
     <View style={styles.tripDetail}>
       <View style={styles.tripHeader}>
-        <Text style={styles.tripUser}>{label}</Text>
-        <Text style={styles.tripDate}>{formatDate(trip.logged_at)}</Text>
+        <Text style={styles.tripDateBold}>{formatDate(trip.logged_at)}</Text>
+        <Text style={styles.tripUserSmall}>{label}</Text>
+      </View>
+      <View style={styles.tripStats}>
+        <StatChip icon="walk-outline" label={formatDistance(trip.distance_meters)} />
+        <StatChip icon="time-outline" label={formatDuration(trip.duration_seconds)} />
+        <View style={{ flex: 1 }} />
+        {canTip && tipState === 'idle' && (
+          <TouchableOpacity style={styles.tipBtn} onPress={() => setTipState('picking')}>
+            <Ionicons name="heart-outline" size={12} color={COLORS.GREEN} />
+            <Text style={styles.tipBtnText}>Tip</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Tip button / picker — only for others' trips */}
-      {!isOwn && tipState === 'idle' && (
-        <TouchableOpacity style={styles.tipBtn} onPress={() => setTipState('picking')}>
-          <Ionicons name="heart-outline" size={14} color={COLORS.GREEN} />
-          <Text style={styles.tipBtnText}>Tip</Text>
-        </TouchableOpacity>
-      )}
-      {!isOwn && tipState === 'picking' && (
+      {canTip && tipState === 'picking' && (
         <View style={styles.tipPicker}>
           <Text style={styles.tipPickerLabel}>Send tip in HBAR</Text>
           <View style={styles.tipPresets}>
@@ -283,24 +298,6 @@ function TripDetail({ trip, myWallet }: { trip: Trip; myWallet: string }) {
           </TouchableOpacity>
         </View>
       )}
-      {!isOwn && tipState === 'sending' && (
-        <View style={styles.tipStatus}>
-          <ActivityIndicator size="small" color={COLORS.GREEN} />
-          <Text style={styles.tipStatusText}>Sending {selectedAmount} HBAR...</Text>
-        </View>
-      )}
-      {!isOwn && tipState === 'done' && (
-        <View style={styles.tipStatus}>
-          <Ionicons name="checkmark-circle" size={16} color={COLORS.GREEN} />
-          <Text style={styles.tipStatusText}>{selectedAmount} HBAR sent!</Text>
-        </View>
-      )}
-
-      <View style={styles.tripStats}>
-        <StatChip icon="walk-outline" label={formatDistance(trip.distance_meters)} />
-        <StatChip icon="time-outline" label={formatDuration(trip.duration_seconds)} />
-        <StatChip icon="star-outline" label={`${trip.score} pts`} />
-      </View>
 
       <Text style={styles.birdsTitle}>Birds Spotted</Text>
       {(trip.birds ?? []).length === 0 ? (
@@ -400,6 +397,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  tripDateBold: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: COLORS.DARK,
+  },
+  tripUserSmall: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: COLORS.GRAY,
   },
   tripUser: {
     fontFamily: 'Poppins_600SemiBold',

@@ -25,5 +25,5 @@ export const dynamicClient = createClient({
   appLogoUrl: 'https://i.imgur.com/Jj2lifz.png',
   evmNetworks: [hederaTestnet],
 })
-  .extend(ReactNativeExtension())
+  .extend(ReactNativeExtension({ appOrigin: 'https://birdquest.expo.dev' }))
   .extend(ViemExtension());
