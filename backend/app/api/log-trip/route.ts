@@ -2,6 +2,7 @@ import {
   AccountId,
   Client,
   PrivateKey,
+  TokenAssociateTransaction,
   TokenId,
   TokenMintTransaction,
   TopicId,
@@ -136,6 +137,65 @@ async function logToSupabase(body: LogTripBody, score: number) {
   return { tripId: data.id };
 }
 
+// ── First Trip NFT ────────────────────────────────────────────────────────────
+
+const FIRST_TRIP_METADATA = JSON.stringify({
+  name: 'First Trip',
+  image: 'https://i.imgur.com/Cv1HgA5.png',
+});
+
+const RARE_BIRD_METADATA = JSON.stringify({
+  name: 'Rare Bird',
+  image: 'https://i.imgur.com/dcWvp9E.png',
+});
+
+async function alreadyHasBadge(walletAddress: string, badgeName: string): Promise<boolean> {
+  const tokenId = process.env.HEDERA_BADGE_TOKEN_ID!;
+  const res = await fetch(
+    `https://testnet.mirrornode.hedera.com/api/v1/accounts/${walletAddress}/nfts?token.id=${tokenId}&limit=50`
+  );
+  const data = await res.json();
+  const nfts: any[] = data.nfts ?? [];
+  return nfts.some(nft => {
+    try {
+      const meta = JSON.parse(Buffer.from(nft.metadata, 'base64').toString('utf8'));
+      return meta.name === badgeName;
+    } catch { return false; }
+  });
+}
+
+async function mintBadgeNFT(walletAddress: string, metadata: string, badgeName: string) {
+  if (await alreadyHasBadge(walletAddress, badgeName)) {
+    return { badge: badgeName, skipped: true };
+  }
+
+  const badgeTokenId = TokenId.fromString(process.env.HEDERA_BADGE_TOKEN_ID!);
+  const operatorId = AccountId.fromString(process.env.HEDERA_ACCOUNT_ID!);
+  const recipientId = AccountId.fromEvmAddress(0, 0, walletAddress);
+
+  const mintTx = await new TokenMintTransaction()
+    .setTokenId(badgeTokenId)
+    .setMetadata([Buffer.from(metadata)])
+    .execute(hederaClient);
+  const mintReceipt = await mintTx.getReceipt(hederaClient);
+  const serial = mintReceipt.serials[0].toString();
+
+  const transferTx = await new TransferTransaction()
+    .addNftTransfer(badgeTokenId, parseInt(serial), operatorId, recipientId)
+    .execute(hederaClient);
+  await transferTx.getReceipt(hederaClient);
+
+  return { badge: badgeName, serial };
+}
+
+async function isFirstTrip(walletAddress: string): Promise<boolean> {
+  const { count } = await supabase
+    .from('trips')
+    .select('*', { count: 'exact', head: true })
+    .eq('wallet_address', walletAddress);
+  return (count ?? 0) === 0;
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -151,19 +211,28 @@ export async function POST(request: Request) {
   }
 
   const score = calcScore(body);
+  const firstTrip = await isFirstTrip(body.walletAddress);
+  const spottedRare = body.birds.some(b => findBird(b.name)?.rarity === 'Rare');
 
-  const [hcsResult, htsResult, dbResult] = await Promise.allSettled([
+  const tasks: Promise<any>[] = [
     submitHCS(body, score),
     mintBirdTokens(body.walletAddress, score),
     logToSupabase(body, score),
-  ]);
+  ];
+  if (firstTrip) tasks.push(mintBadgeNFT(body.walletAddress, FIRST_TRIP_METADATA, 'First Trip'));
+  if (spottedRare) tasks.push(mintBadgeNFT(body.walletAddress, RARE_BIRD_METADATA, 'Rare Bird'));
+
+  const [hcsResult, htsResult, dbResult, ...nftResults] = await Promise.allSettled(tasks);
 
   return Response.json(
     {
       score,
-      hcs: hcsResult.status === 'fulfilled' ? hcsResult.value : { error: hcsResult.reason?.message },
-      hts: htsResult.status === 'fulfilled' ? htsResult.value : { error: htsResult.reason?.message },
-      db:  dbResult.status  === 'fulfilled' ? dbResult.value  : { error: dbResult.reason?.message  },
+      firstTrip,
+      spottedRare,
+      hcs: hcsResult?.status === 'fulfilled' ? hcsResult.value : { error: (hcsResult as any)?.reason?.message },
+      hts: htsResult?.status === 'fulfilled' ? htsResult.value : { error: (htsResult as any)?.reason?.message },
+      db:  dbResult?.status  === 'fulfilled' ? dbResult.value  : { error: (dbResult as any)?.reason?.message  },
+      nfts: nftResults.map(r => r.status === 'fulfilled' ? r.value : { error: (r as any).reason?.message }),
     },
     {
       headers: {
