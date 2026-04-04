@@ -1,5 +1,14 @@
 import React from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+  'eth_fillTransaction',
+  '[Webview] Request ethRequest rejected',
+  '[Webview] Request viem_signTransaction rejected',
+  'HTTP request failed',
+  'Cannot send message to iframe',
+  'Method eth_fillTransaction not found',
+]);
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
