@@ -35,6 +35,18 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "65df17b1-aa8e-4ccc-b224-d3e7deaa9493"
+      }
+    },
+    "owner": "mattwong",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/65df17b1-aa8e-4ccc-b224-d3e7deaa9493"
+    }
   }
 }
