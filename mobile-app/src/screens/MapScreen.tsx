@@ -106,6 +106,7 @@ export default function MapScreen() {
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
 
@@ -120,12 +121,16 @@ export default function MapScreen() {
     })();
   }, []);
 
-  useEffect(() => {
+  function fetchTrips() {
+    setRefreshing(true);
     fetch(`${API_URL}/api/trips`)
       .then(r => r.json())
       .then(data => setTrips(data.trips ?? []))
-      .catch(() => {});
-  }, []);
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  }
+
+  useEffect(() => { fetchTrips(); }, []);
 
   const clusters = clusterTrips(trips);
 
@@ -166,6 +171,14 @@ export default function MapScreen() {
           </Marker>
         ))}
       </MapView>
+
+      {/* Refresh button */}
+      <TouchableOpacity style={styles.refreshBtn} onPress={fetchTrips} disabled={refreshing}>
+        {refreshing
+          ? <ActivityIndicator size="small" color={COLORS.WHITE} />
+          : <Ionicons name="refresh" size={20} color={COLORS.WHITE} />
+        }
+      </TouchableOpacity>
 
       {/* Trip detail / cluster list modal */}
       <Modal
@@ -327,6 +340,22 @@ function StatChip({ icon, label }: { icon: any; label: string }) {
 const styles = StyleSheet.create({
   map: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  refreshBtn: {
+    position: 'absolute',
+    bottom: 24,
+    alignSelf: 'center',
+    backgroundColor: COLORS.GREEN,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
 
   // Pins
   pin: {
