@@ -56,6 +56,8 @@ export default function ProfileScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [promoClaimed, setPromoClaimed] = useState(false);
+  const [promoClaiming, setPromoClaiming] = useState(false);
 
   useEffect(() => {
     if (!walletAddress) return;
@@ -69,6 +71,23 @@ export default function ProfileScreen() {
       .catch(() => setBirdBalance(0))
       .finally(() => setLoading(false));
   }, [walletAddress]);
+
+  async function claimHbar() {
+    if (promoClaiming || promoClaimed || !walletAddress) return;
+    setPromoClaiming(true);
+    try {
+      const res = await fetch(`${API_URL}/api/claim-hbar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress }),
+      });
+      const data = await res.json();
+      if (res.ok) setPromoClaimed(true);
+      else if (data.error === 'Already claimed') setPromoClaimed(true);
+    } finally {
+      setPromoClaiming(false);
+    }
+  }
 
   function copyAddress() {
     Clipboard.setString(walletAddress);
@@ -107,6 +126,28 @@ export default function ProfileScreen() {
           )}
         </View>
       </View>
+
+      {/* Explorer's Grant promo banner */}
+      {!promoClaimed && (
+        <View style={styles.promoBanner}>
+          <View style={styles.promoTextCol}>
+            <Text style={styles.promoTitle}>Explorer's Grant 🎁</Text>
+            <Text style={styles.promoDesc}>
+              Claim 10 free HBAR to unlock rare birds or tip others!
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.promoBtn, promoClaiming && styles.promoBtnDisabled]}
+            onPress={claimHbar}
+            disabled={promoClaiming}
+          >
+            {promoClaiming
+              ? <ActivityIndicator size="small" color={COLORS.WHITE} />
+              : <Text style={styles.promoBtnText}>Claim</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Past trips */}
       <Text style={styles.sectionTitle}>Past Trips</Text>
@@ -266,5 +307,41 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
     fontSize: 14,
     color: COLORS.GRAY,
+  },
+
+  // Promo banner
+  promoBanner: {
+    backgroundColor: COLORS.GREEN,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  promoTextCol: { flex: 1, gap: 3 },
+  promoTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: COLORS.WHITE,
+  },
+  promoDesc: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 12,
+    color: COLORS.WHITE,
+    opacity: 0.9,
+  },
+  promoBtn: {
+    backgroundColor: COLORS.WHITE,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 64,
+    alignItems: 'center',
+  },
+  promoBtnDisabled: { opacity: 0.6 },
+  promoBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: COLORS.GREEN,
   },
 });
