@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mattwong.birdquest"
+      "bundleIdentifier": "com.mattwong.birdquest",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BirdQuest uses your location to show nearby bird sightings and track your trips."
+      }
     },
     "android": {
       "adaptiveIcon": {
