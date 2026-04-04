@@ -18,6 +18,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 // ~80 metres in degrees — trips closer than this get clustered
 const CLUSTER_THRESHOLD = 0.0007;
 
+interface BirdEntry {
+  name: string;
+  count: number;
+}
+
 interface Trip {
   id: string;
   username: string;
@@ -30,6 +35,7 @@ interface Trip {
   distance_meters: number;
   duration_seconds: number;
   score: number;
+  birds: BirdEntry[];
 }
 
 interface Cluster {
@@ -88,6 +94,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -152,17 +159,26 @@ export default function MapScreen() {
         visible={selectedCluster !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setSelectedCluster(null)}
+        onRequestClose={() => { setSelectedTrip(null); setSelectedCluster(null); }}
       >
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
-          onPress={() => setSelectedCluster(null)}
+          onPress={() => { setSelectedTrip(null); setSelectedCluster(null); }}
         />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
 
-          {selectedCluster && selectedCluster.trips.length === 1 ? (
+          {/* Trip detail drill-down */}
+          {selectedTrip ? (
+            <>
+              <TouchableOpacity style={styles.backRow} onPress={() => setSelectedTrip(null)}>
+                <Ionicons name="chevron-back" size={18} color={COLORS.GREEN} />
+                <Text style={styles.backText}>Back</Text>
+              </TouchableOpacity>
+              <TripDetail trip={selectedTrip} />
+            </>
+          ) : selectedCluster && selectedCluster.trips.length === 1 ? (
             <TripDetail trip={selectedCluster.trips[0]} />
           ) : selectedCluster ? (
             <>
@@ -172,7 +188,9 @@ export default function MapScreen() {
                 keyExtractor={t => t.id}
                 ItemSeparatorComponent={() => <View style={styles.separator} />}
                 renderItem={({ item }) => (
-                  <TripDetail trip={item} compact />
+                  <TouchableOpacity onPress={() => setSelectedTrip(item)} activeOpacity={0.7}>
+                    <TripSummaryRow trip={item} />
+                  </TouchableOpacity>
                 )}
               />
             </>
@@ -183,10 +201,11 @@ export default function MapScreen() {
   );
 }
 
-function TripDetail({ trip, compact }: { trip: Trip; compact?: boolean }) {
+// Row shown in cluster list — no score, tappable
+function TripSummaryRow({ trip }: { trip: Trip }) {
   const label = trip.username ? `@${trip.username}` : `${trip.wallet_address.slice(0, 6)}...`;
   return (
-    <View style={compact ? styles.tripRowCompact : styles.tripDetail}>
+    <View style={styles.tripRowCompact}>
       <View style={styles.tripHeader}>
         <Text style={styles.tripUser}>{label}</Text>
         <Text style={styles.tripDate}>{formatDate(trip.logged_at)}</Text>
@@ -195,8 +214,38 @@ function TripDetail({ trip, compact }: { trip: Trip; compact?: boolean }) {
         <StatChip icon="egg-outline" label={`${trip.total_birds} birds`} />
         <StatChip icon="walk-outline" label={formatDistance(trip.distance_meters)} />
         <StatChip icon="time-outline" label={formatDuration(trip.duration_seconds)} />
+      </View>
+    </View>
+  );
+}
+
+// Full detail with birds list
+function TripDetail({ trip }: { trip: Trip }) {
+  const label = trip.username ? `@${trip.username}` : `${trip.wallet_address.slice(0, 6)}...`;
+  return (
+    <View style={styles.tripDetail}>
+      <View style={styles.tripHeader}>
+        <Text style={styles.tripUser}>{label}</Text>
+        <Text style={styles.tripDate}>{formatDate(trip.logged_at)}</Text>
+      </View>
+      <View style={styles.tripStats}>
+        <StatChip icon="walk-outline" label={formatDistance(trip.distance_meters)} />
+        <StatChip icon="time-outline" label={formatDuration(trip.duration_seconds)} />
         <StatChip icon="star-outline" label={`${trip.score} pts`} />
       </View>
+
+      <Text style={styles.birdsTitle}>Birds Spotted</Text>
+      {(trip.birds ?? []).length === 0 ? (
+        <Text style={styles.noBirds}>No birds recorded</Text>
+      ) : (
+        (trip.birds ?? []).map((b, i) => (
+          <View key={i} style={styles.birdRow}>
+            <Ionicons name="egg" size={14} color={COLORS.GREEN} />
+            <Text style={styles.birdName}>{b.name}</Text>
+            <Text style={styles.birdCount}>×{b.count}</Text>
+          </View>
+        ))
+      )}
     </View>
   );
 }
@@ -272,8 +321,12 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
 
+  // Back button
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
+  backText: { fontFamily: 'Poppins_600SemiBold', fontSize: 14, color: COLORS.GREEN },
+
   // Trip rows
-  tripDetail: { gap: 8 },
+  tripDetail: { gap: 10 },
   tripRowCompact: { gap: 6 },
   tripHeader: {
     flexDirection: 'row',
@@ -307,6 +360,36 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: 'Poppins_400Regular',
     fontSize: 11,
+    color: COLORS.GRAY,
+  },
+
+  // Birds list
+  birdsTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: COLORS.DARK,
+    marginTop: 4,
+  },
+  noBirds: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: COLORS.GRAY,
+  },
+  birdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  birdName: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 13,
+    color: COLORS.DARK,
+    flex: 1,
+  },
+  birdCount: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 13,
     color: COLORS.GRAY,
   },
 });

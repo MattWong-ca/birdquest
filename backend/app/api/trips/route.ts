@@ -14,7 +14,7 @@ const CORS = {
 export async function GET() {
   const { data, error } = await supabase
     .from('trips')
-    .select('id, username, wallet_address, logged_at, start_lat, start_lon, total_birds, species_count, distance_meters, duration_seconds, score')
+    .select('id, username, wallet_address, logged_at, start_lat, start_lon, total_birds, species_count, distance_meters, duration_seconds, score, birds')
     .order('logged_at', { ascending: false })
     .limit(200);
 
