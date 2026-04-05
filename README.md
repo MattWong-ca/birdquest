@@ -35,6 +35,8 @@ Most casual birders never log their sightings because there's no reward or motiv
 
 Unlike other apps that force you to start from scratch, BirdQuest lets you contribute directly to the world's largest biodiversity dataset with over 4 million contributors.
 
+## Set up + Usage
+Download Expo Go and scan this QR code: 
 
 ## Tech Stack
 
@@ -49,12 +51,19 @@ BirdQuest uses both Hedera and Dynamic comprehensively:
 ### Hedera
 
 1. **HCS (Hedera Consensus Service)** — every trip is submitted as an immutable, timestamped message to a public topic. This creates a tamper-proof audit trail of all birdwatching activity independent of our database.
+    - https://hashscan.io/testnet/topic/0.0.8504662
 2. **HTS fungible tokens (BIRD)** — a custom token minted to users at the end of each trip. Scoring factors in distance, time, and species rarity. The operator treasury mints and transfers tokens server-side with sub-cent fees.
+    - https://hashscan.io/testnet/token/0.0.8504663
 3. **HTS NFTs (BQBADGE)** — achievement badges minted as non-fungible tokens and transferred to users' wallets. Each badge carries on-chain metadata (name, image) verified via the Mirror Node API to prevent duplicates.
+    - https://hashscan.io/testnet/token/0.0.8506713
 4. **Scheduled Transactions** — weekly quest payouts use `ScheduleCreateTransaction` with `waitForExpiry` to create a publicly auditable, time-locked HBAR distribution to the top 3 finishers. The schedule ID is stored and linked to Hashscan so anyone can verify the payout.
 5. **Mirror Node API** — used for fetching user’s NFT badges + BIRD token balance.
 
 *The operator account handles all token transfers server-side, so users never pay gas.* 
+
+Operator account:
+- 0.0.8474143
+- 0x072ab32855835d3d4a837f92a26275f3ee8cb84d
 
 ### Dynamic
 
