@@ -38,7 +38,7 @@ Most casual birders never log their sightings because there's no reward or motiv
 Unlike other apps that force you to start from scratch, BirdQuest lets you contribute directly to the world's largest biodiversity dataset with over 4 million contributors.
 
 ## Set up + Usage
-Download Expo Go and scan this QR code: 
+Download Expo Go and scan this QR code: https://i.imgur.com/zAu9DFR.png
 
 ## Tech Stack
 
