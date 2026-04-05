@@ -19,18 +19,19 @@ Most casual birders never log their sightings because there's no reward or motiv
 ## Core Features
 
 1. Social
-    - **Share Cards** - share your birding trip stats, just like Strava/Flighty
+    - **Share Cards** — share your birding trip stats, just like Strava/Flighty
     - **Community map** — see where other birders have been and tap any trip to view their sightings
 
 2. Incentives + Gamification
     - **Onchain rewards** — earn BIRD tokens every trip, weighted by distance, time, and species rarity
     - **Weekly quests** — compete on a live leaderboard for a HBAR prize pool, paid out automatically onchain
     - **NFT badges** — mint badges like *First Trip* and *Rare Bird* directly to your wallet
-    - **Tip users** - tip other birders for great finds!
+    - **Tip users** — tip other birders for great finds!
 
 3. Direct Contribution to iNaturalist
     - **AI bird identification** — point your camera at a bird, get an instant ID powered by Claude vision
     - **iNaturalist sync** — publish sightings to the largest citizen science database in one tap
+        - [iNaturalist Observations](https://www.inaturalist.org/observations?place_id=any&user_id=birdquest&verifiable=any)
 
 Unlike other apps that force you to start from scratch, BirdQuest lets you contribute directly to the world's largest biodiversity dataset with over 4 million contributors.
 
@@ -50,13 +51,20 @@ BirdQuest uses both Hedera and Dynamic comprehensively:
 1. **HCS (Hedera Consensus Service)** — every trip is submitted as an immutable, timestamped message to a public topic. This creates a tamper-proof audit trail of all birdwatching activity independent of our database.
 2. **HTS fungible tokens (BIRD)** — a custom token minted to users at the end of each trip. Scoring factors in distance, time, and species rarity. The operator treasury mints and transfers tokens server-side with sub-cent fees.
 3. **HTS NFTs (BQBADGE)** — achievement badges minted as non-fungible tokens and transferred to users' wallets. Each badge carries on-chain metadata (name, image) verified via the Mirror Node API to prevent duplicates.
-4. **Scheduled Transactions** — weekly quest payouts use `ScheduleCreateTransaction` with `waitForExpiry` to create a publicly auditable, time-locked HBAR distribution to the top 10 finishers. The schedule ID is stored and linked to Hashscan so anyone can verify the payout.
-5. **HBAR tipping** — users can tip other birders directly wallet-to-wallet from within the app, using Hedera's native currency at near-zero cost.
+4. **Scheduled Transactions** — weekly quest payouts use `ScheduleCreateTransaction` with `waitForExpiry` to create a publicly auditable, time-locked HBAR distribution to the top 3 finishers. The schedule ID is stored and linked to Hashscan so anyone can verify the payout.
+5. **Mirror Node API** — used for fetching user’s NFT badges + BIRD token balance.
+
+*The operator account handles all token transfers server-side, so users never pay gas.* 
 
 ### Dynamic
 
-Dynamic handles wallet creation and authentication. Users sign up with email — Dynamic provisions an embedded EVM wallet automatically, no seed phrase required. The ViemExtension bridges Dynamic's wallet to viem for signing Hedera EVM transactions, enabling tipping and token transfers without users needing to understand crypto at all.
-
+- Embedded wallet creation via username + email
+    - Username useful for social aspect
+- Custom chain: Hedera Testnet (EVM)
+- Various hooks
+    - state, address, wallet/login modal
+- Transactions
+    - Tipping and receiving tokens
 
 ## Why Now
 
