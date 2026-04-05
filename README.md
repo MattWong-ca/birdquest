@@ -2,6 +2,8 @@
 
 Pokémon GO for birdwatching — contribute to the largest biodiversity dataset + earn real crypto rewards!
 
+<img width="1440" height="807" alt="Screenshot 2026-04-05 at 1 11 25 AM" src="https://github.com/user-attachments/assets/d551cdb5-d449-4083-99aa-7ec42a05b54d" />
+
 
 ## The Problem
 
